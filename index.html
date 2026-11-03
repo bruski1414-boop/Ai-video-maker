@@ -44,19 +44,68 @@ function setMode(m){mode=m;document.getElementById('imageTab').classList.toggle(
 document.getElementById('imageTab').onclick=()=>setMode('image');document.getElementById('videoTab').onclick=()=>setMode('video');
 function showStatus(s){statusEl.textContent=s}
 function setResult(url,type){lastUrl=url;canvas.innerHTML='';const el=document.createElement(type==='video'?'video':'img');el.src=url;if(type==='video'){el.controls=true;el.autoplay=true;el.loop=true;el.muted=true}else{el.alt='AI generated image';}canvas.appendChild(el);actions.hidden=false;downloadEl.href=url;downloadEl.download='veyra-'+type+(type==='video'?'.mp4':'.png');openResult.onclick=()=>window.open(url,'_blank','noopener');}
-function makeImageUrl(prompt){const full=prompt+', '+styleEl.value;return 'https://image.pollinations.ai/prompt/'+encodeURIComponent(full)+'?width='+ratioEl.value.split('x')[0]+'&height='+ratioEl.value.split('x')[1]+'&nologo=true&seed='+Math.floor(Math.random()*999999);}
+function makeImageUrl(prompt){const full=prompt+', '+styleEl.value;const [width,height]=ratioEl.value.split('x');const url=new URL('https://image.pollinations.ai/prompt/'+encodeURIComponent(full));url.searchParams.set('width',width);url.searchParams.set('height',height);url.searchParams.set('nologo','true');url.searchParams.set('seed',Math.floor(Math.random()*999999));return url.toString();}
+function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 async function makeVideo(prompt){
- // Uses the public Hugging Face Gradio Space behind the free community demo.
  const base='https://umer-un-prompt-to-video.hf.space';
- const response=await fetch(base+'/gradio_api/call/text_to_video',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:[prompt+', '+styleEl.value]})});
- if(!response.ok)throw new Error('The free video server is busy or unavailable. Try again later.');
- const data=await response.json();if(!data.event_id)throw new Error('Video request could not be queued.');
- const stream=await fetch(base+'/gradio_api/call/text_to_video/'+data.event_id);
- if(!stream.ok)throw new Error('Could not check the video queue.');
- const reader=stream.body.getReader(),decoder=new TextDecoder();let buffer='';
- while(true){const {value,done}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const chunks=buffer.split('\n\n');buffer=chunks.pop()||'';for(const chunk of chunks){const line=chunk.split('\n').find(x=>x.startsWith('data:'));if(!line)continue;try{const obj=JSON.parse(line.slice(5));if(obj&&obj[0]&&obj[0].video){const v=obj[0].video;return typeof v==='string'?v:(v.url||base+'/file='+v.path);}}catch(e){}}}
- throw new Error('The model did not return a video. It may have timed out; please retry.');
+ const fullPrompt=prompt+', '+styleEl.value;
+ const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),8*60*1000);
+ try{
+  const response=await fetch(base+'/gradio_api/call/text_to_video',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data:[fullPrompt]}),signal:controller.signal});
+  if(!response.ok)throw new Error('The community video server returned HTTP '+response.status+'. It may be overloaded or temporarily offline.');
+  const queued=await response.json();if(!queued.event_id)throw new Error('The video server did not provide a queue ID.');
+  const stream=await fetch(base+'/gradio_api/call/text_to_video/'+queued.event_id,{signal:controller.signal});
+  if(!stream.ok)throw new Error('Could not connect to the video queue (HTTP '+stream.status+').');
+  if(!stream.body)throw new Error('This browser cannot read the video queue stream.');
+  const reader=stream.body.getReader(),decoder=new TextDecoder();let buffer='';
+  while(true){
+   const {value,done}=await reader.read();if(done)break;
+   buffer+=decoder.decode(value,{stream:true});
+   const chunks=buffer.split('\n\n');buffer=chunks.pop()||'';
+   for(const chunk of chunks){
+    const line=chunk.split('\n').find(x=>x.startsWith('data:'));if(!line)continue;
+    const raw=line.slice(5).trim();if(!raw||raw==='[DONE]')continue;
+    let obj;try{obj=JSON.parse(raw)}catch{continue}
+    if(obj&&obj.error)throw new Error('Video model error: '+obj.error);
+    const output=Array.isArray(obj)?obj[0]:obj;
+    const video=output?.video||output?.[0]?.video;
+    if(video){
+      if(typeof video==='string')return video;
+      if(video.url)return video.url;
+      if(video.path)return base+'/gradio_api/file='+encodeURIComponent(video.path);
+    }
+    if(output?.url&&typeof output.url==='string'&&/\.(mp4|webm)(\?|$)/i.test(output.url))return output.url;
+   }
+   showStatus('Video queued — waiting for the community GPU…');
+  }
+  throw new Error('The video queue ended without a video file. Try again later.');
+ }catch(e){if(e.name==='AbortError')throw new Error('Video generation timed out after 8 minutes. The free server may be overloaded.');throw e;}
+ finally{clearTimeout(timeout);}
 }
-generateBtn.onclick=async()=>{const p=promptEl.value.trim();if(!p){promptEl.focus();showStatus('Add a prompt first');return;}generateBtn.disabled=true;actions.hidden=true;canvas.innerHTML='<div class="empty"><div class="spark">✦</div><strong>Creating your '+mode+'…</strong><p>Free community servers can take a few minutes. Keep this page open.</p></div>';showStatus('Working…');try{if(mode==='image'){const url=makeImageUrl(p);const img=new Image();img.onload=()=>{setResult(url,'image');showStatus('Image ready')};img.onerror=()=>{throw new Error('Image service is temporarily unavailable. Try a different prompt or retry later.')};img.src=url;await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('Image generation failed or was rate-limited. Please retry in a moment.'));});}else{const url=await makeVideo(p);setResult(url,'video');showStatus('Video ready');}}catch(e){canvas.innerHTML='<div class="empty"><div class="spark">⚠</div><strong>Generation didn’t finish</strong><p>'+String(e.message||e)+'</p></div>';showStatus('Try again later');}finally{generateBtn.disabled=false;}};
+async function makeImage(prompt){
+ const url=makeImageUrl(prompt);
+ showStatus('Requesting image from community model…');
+ const img=new Image();img.alt='AI-generated image';
+ await new Promise((resolve,reject)=>{
+  const timer=setTimeout(()=>reject(new Error('Image generation took too long. Try again later.')),120000);
+  img.onload=()=>{clearTimeout(timer);resolve();};
+  img.onerror=()=>{clearTimeout(timer);reject(new Error('The free image provider refused or failed this request. It may be rate-limited (HTTP 402), busy, or temporarily unavailable. Wait a little and retry.'));};
+  img.src=url;
+ });
+ setResult(url,'image');
+}
+generateBtn.onclick=async()=>{
+ const p=promptEl.value.trim();if(!p){promptEl.focus();showStatus('Add a prompt first');return;}
+ generateBtn.disabled=true;actions.hidden=true;
+ canvas.innerHTML='<div class="empty"><div class="spark">✦</div><strong>Creating your '+mode+'…</strong><p>Community models can take a few minutes. Keep this page open.</p></div>';
+ showStatus('Starting…');
+ try{
+  if(mode==='image'){await makeImage(p);showStatus('Image ready');}
+  else{const url=await makeVideo(p);setResult(url,'video');showStatus('Video ready');}
+ }catch(e){
+  canvas.innerHTML='<div class="empty"><div class="spark">⚠</div><strong>Generation didn’t finish</strong><p>'+String(e.message||e)+'</p><p>Try a shorter, simpler prompt or wait before retrying.</p></div>';
+  showStatus('Generation failed');
+ }finally{generateBtn.disabled=false;}
+};
 </script>
 </body></html>
