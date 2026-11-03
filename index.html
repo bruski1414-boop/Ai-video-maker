@@ -43,8 +43,28 @@ label{display:block;color:#cbd5e6;font-size:13px;font-weight:700;margin:16px 0 8
 </section>
 </section>
 </main>
-<footer>VEYRA STUDIO · Community-powered demo. Do not upload private or sensitive images.</footer>
-<script>
+<section class="panel" style="margin-top:18px">
+<h2 style="margin:0 0 8px;font-size:17px">Advanced generation (provider-ready)</h2>
+<p class="hint">The official Higgsfield API is paid per generation. Add your API key only to a secure backend—not to this public page. This UI does not yet submit paid API requests.</p>
+<label for="provider">Provider</label>
+<select id="provider">
+<option value="free">Free community mode (best effort)</option>
+<option value="higgsfield">Higgsfield API (backend integration required)</option>
+<option value="openai">OpenAI image API (backend integration required)</option>
+</select>
+<label for="modelSelect">Model preference</label>
+<select id="modelSelect">
+<option value="auto">Auto — choose suitable model</option>
+<option value="cinematic">Cinematic video</option>
+<option value="fast">Fast / lower-cost video</option>
+<option value="image-quality">High-quality image</option>
+</select>
+<div class="hint" id="providerStatus">Free community services can be busy or unavailable.</div>
+</section>\n<footer>VEYRA STUDIO · Community-powered demo. Do not upload private or sensitive images.</footer>
+<script>\nconst providerEl=document.getElementById('provider'),modelEl=document.getElementById('modelSelect'),providerStatus=document.getElementById('providerStatus');
+providerEl.onchange=()=>{providerStatus.textContent=providerEl.value==='free'?'Free community endpoint selected. No uptime or quality guarantee.':providerEl.value==='higgsfield'?'Higgsfield needs a server-side API integration and a funded API account. This page will not expose API keys.':'OpenAI image generation needs a server-side API integration and billing/API access.';};
+modelEl.onchange=()=>{if(modelEl.value==='cinematic')providerStatus.textContent='Cinematic video preference selected. Actual model routing needs the backend integration.';else if(modelEl.value==='fast')providerStatus.textContent='Fast/low-cost preference selected. Actual model routing needs the backend integration.';else if(modelEl.value==='image-quality')providerStatus.textContent='High-quality image preference selected. Actual model routing needs the backend integration.';};
+
 const engineEl=document.getElementById('engine'),keyNote=document.getElementById('keyNote');\nconst promptEl=document.getElementById('prompt'),styleEl=document.getElementById('style'),ratioEl=document.getElementById('ratio'),generateBtn=document.getElementById('generate'),statusEl=document.getElementById('status'),canvas=document.getElementById('canvas'),actions=document.getElementById('actions'),downloadEl=document.getElementById('download'),openResult=document.getElementById('openResult');
 let mode='image',lastUrl='';
 engineEl.onchange=()=>{keyNote.textContent=engineEl.value==='free'?'Community free endpoint; availability and quality are not guaranteed.':engineEl.value==='openai'?'OpenAI image API requires a secret key and a secure server-side proxy—not a key embedded in this public page.':'Higgsfield is a separate provider; access/API availability depends on its official developer offering. This demo does not include a Higgsfield API integration.';};\nfunction setMode(m){mode=m;document.getElementById('imageTab').classList.toggle('active',m==='image');document.getElementById('videoTab').classList.toggle('active',m==='video');document.getElementById('imageOptions').hidden=m==='video';document.getElementById('videoOptions').hidden=m==='image';generateBtn.textContent=m==='image'?'Generate image ✦':'Generate video ▶';}
