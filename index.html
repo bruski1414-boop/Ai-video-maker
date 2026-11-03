@@ -26,7 +26,14 @@ label{display:block;color:#cbd5e6;font-size:13px;font-weight:700;margin:16px 0 8
 <label for="style">Style</label><select id="style"><option value="cinematic, high detail">Cinematic / realistic</option><option value="photorealistic, editorial photography">Photorealistic</option><option value="3D render, polished lighting">3D render</option><option value="anime illustration">Anime</option><option value="minimalist graphic design">Minimalist</option><option value="fantasy concept art">Fantasy concept art</option></select>
 <div id="imageOptions"><label for="ratio">Image format</label><select id="ratio"><option value="1024x1024">Square (1:1)</option><option value="1280x720">Landscape (16:9)</option><option value="720x1280">Portrait (9:16)</option></select></div>
 <div id="videoOptions" hidden><label for="duration">Video engine</label><select id="duration"><option value="community">Free community video model (short clip)</option></select><div class="hint">Video generation uses shared community GPU resources. It may queue, fail, or be temporarily unavailable.</div></div>
-<button class="primary" id="generate">Generate image ✦</button>
+<div class="hint" style="margin-top:12px">Advanced model routing (API keys required for many providers)</div>
+<label for="engine">AI engine</label>
+<select id="engine">
+<option value="free">Community free image endpoint (best effort)</option>
+<option value="openai">OpenAI image API (requires your own API key)</option>
+<option value="fal">Higgsfield / partner provider (only if you have authorized API access)</option>
+</select>
+<div id="keyNote" class="hint">Free community endpoints can be unstable. Paid/private provider API keys must never be placed in public website code.</div>\n<button class="primary" id="generate">Generate image ✦</button>
 <div class="notice"><strong>Free usage:</strong> Veyra Studio connects to public community AI services. This prototype does not charge you or require your own API key. Providers may apply shared rate limits and change their availability.</div>
 </div>
 <div class="panel preview">
@@ -38,9 +45,9 @@ label{display:block;color:#cbd5e6;font-size:13px;font-weight:700;margin:16px 0 8
 </main>
 <footer>VEYRA STUDIO · Community-powered demo. Do not upload private or sensitive images.</footer>
 <script>
-const promptEl=document.getElementById('prompt'),styleEl=document.getElementById('style'),ratioEl=document.getElementById('ratio'),generateBtn=document.getElementById('generate'),statusEl=document.getElementById('status'),canvas=document.getElementById('canvas'),actions=document.getElementById('actions'),downloadEl=document.getElementById('download'),openResult=document.getElementById('openResult');
+const engineEl=document.getElementById('engine'),keyNote=document.getElementById('keyNote');\nconst promptEl=document.getElementById('prompt'),styleEl=document.getElementById('style'),ratioEl=document.getElementById('ratio'),generateBtn=document.getElementById('generate'),statusEl=document.getElementById('status'),canvas=document.getElementById('canvas'),actions=document.getElementById('actions'),downloadEl=document.getElementById('download'),openResult=document.getElementById('openResult');
 let mode='image',lastUrl='';
-function setMode(m){mode=m;document.getElementById('imageTab').classList.toggle('active',m==='image');document.getElementById('videoTab').classList.toggle('active',m==='video');document.getElementById('imageOptions').hidden=m==='video';document.getElementById('videoOptions').hidden=m==='image';generateBtn.textContent=m==='image'?'Generate image ✦':'Generate video ▶';}
+engineEl.onchange=()=>{keyNote.textContent=engineEl.value==='free'?'Community free endpoint; availability and quality are not guaranteed.':engineEl.value==='openai'?'OpenAI image API requires a secret key and a secure server-side proxy—not a key embedded in this public page.':'Higgsfield is a separate provider; access/API availability depends on its official developer offering. This demo does not include a Higgsfield API integration.';};\nfunction setMode(m){mode=m;document.getElementById('imageTab').classList.toggle('active',m==='image');document.getElementById('videoTab').classList.toggle('active',m==='video');document.getElementById('imageOptions').hidden=m==='video';document.getElementById('videoOptions').hidden=m==='image';generateBtn.textContent=m==='image'?'Generate image ✦':'Generate video ▶';}
 document.getElementById('imageTab').onclick=()=>setMode('image');document.getElementById('videoTab').onclick=()=>setMode('video');
 function showStatus(s){statusEl.textContent=s}
 function setResult(url,type){lastUrl=url;canvas.innerHTML='';const el=document.createElement(type==='video'?'video':'img');el.src=url;if(type==='video'){el.controls=true;el.autoplay=true;el.loop=true;el.muted=true}else{el.alt='AI generated image';}canvas.appendChild(el);actions.hidden=false;downloadEl.href=url;downloadEl.download='veyra-'+type+(type==='video'?'.mp4':'.png');openResult.onclick=()=>window.open(url,'_blank','noopener');}
